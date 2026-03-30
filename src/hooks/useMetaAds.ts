@@ -28,9 +28,6 @@ export function useMetaAds() {
 
       const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
         body,
-          date_from: dateFrom,
-          date_to: dateTo,
-        },
       });
 
       if (fnError) throw fnError;
