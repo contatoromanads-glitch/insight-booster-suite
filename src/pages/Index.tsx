@@ -89,7 +89,7 @@ export default function Index() {
             </button>
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50">
-                {clients.map(c => (
+                {allClients.map(c => (
                   <button
                     key={c.id}
                     onClick={() => { setClientId(c.id); setClientOpen(false); }}
