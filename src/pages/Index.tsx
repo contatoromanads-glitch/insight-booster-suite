@@ -10,6 +10,7 @@ import { GenderChart } from '@/components/dashboard/GenderChart';
 import { ChatPanel } from '@/components/dashboard/ChatPanel';
 import { DateFilter } from '@/components/dashboard/DateFilter';
 import { useGoogleAds } from '@/hooks/useGoogleAds';
+import { useMetaAds } from '@/hooks/useMetaAds';
 import {
   clients as mockClients, kpiData as mockKpiData, trendData as mockTrendData,
   cityData as mockCityData, ageData as mockAgeData,
@@ -21,9 +22,15 @@ const googleAdsAccounts = [
   { id: 'gads-1', name: 'Google Ads - 771-715-2917', customerId: '771-715-2917' },
 ];
 
-// Combine real + mock clients
+// Meta Ads accounts
+const metaAdsAccounts = [
+  { id: 'meta-1', name: 'Meta Ads', adAccountId: '' }, // uses env default
+];
+
+// Combine all clients
 const allClients = [
   ...googleAdsAccounts.map(a => ({ id: a.id, name: a.name })),
+  ...metaAdsAccounts.map(a => ({ id: a.id, name: a.name })),
   ...mockClients.map(c => ({ id: `mock-${c.id}`, name: `[Demo] ${c.name}` })),
 ];
 
@@ -31,11 +38,17 @@ export default function Index() {
   const [clientId, setClientId] = useState(googleAdsAccounts[0].id);
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
-  const { data: gadsData, loading, error, fetchData } = useGoogleAds();
+  const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
+  const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
   const isGoogleAds = clientId.startsWith('gads-');
+  const isMetaAds = clientId.startsWith('meta-');
   const gadsAccount = googleAdsAccounts.find(a => a.id === clientId);
+  const metaAccount = metaAdsAccounts.find(a => a.id === clientId);
   const mockId = clientId.replace('mock-', '');
+
+  const loading = isGoogleAds ? gadsLoading : isMetaAds ? metaLoading : false;
+  const error = isGoogleAds ? gadsError : isMetaAds ? metaError : null;
 
   const getDateRange = useCallback(() => {
     const now = new Date();
@@ -51,22 +64,25 @@ export default function Index() {
   }, [period]);
 
   useEffect(() => {
+    const { from, to } = getDateRange();
     if (isGoogleAds && gadsAccount) {
-      const { from, to } = getDateRange();
-      fetchData(gadsAccount.customerId, from, to);
+      fetchGads(gadsAccount.customerId, from, to);
+    } else if (isMetaAds && metaAccount) {
+      fetchMeta(metaAccount.adAccountId, from, to);
     }
-  }, [clientId, period, isGoogleAds]);
+  }, [clientId, period, isGoogleAds, isMetaAds]);
 
   const client = allClients.find(c => c.id === clientId)!;
 
   // Use real or mock data
-  const kpi = isGoogleAds && gadsData ? gadsData.kpi : mockKpiData[mockId];
-  const trend = isGoogleAds && gadsData ? gadsData.trend : mockTrendData[mockId];
-  const cities = isGoogleAds && gadsData ? gadsData.cities : mockCityData[mockId];
-  const ages = isGoogleAds && gadsData ? gadsData.ages : mockAgeData[mockId];
-  const creatives = isGoogleAds ? [] : mockCreativeData[mockId];
-  const adSets = isGoogleAds && gadsData ? gadsData.adSets : mockAdSetData[mockId];
-  const genders = isGoogleAds && gadsData ? gadsData.genders : mockGenderData[mockId];
+  const activeData = isGoogleAds ? gadsData : isMetaAds ? metaData : null;
+  const kpi = activeData ? activeData.kpi : mockKpiData[mockId];
+  const trend = activeData ? activeData.trend : mockTrendData[mockId];
+  const cities = activeData ? activeData.cities : mockCityData[mockId];
+  const ages = activeData ? activeData.ages : mockAgeData[mockId];
+  const creatives = (isGoogleAds || isMetaAds) ? [] : mockCreativeData[mockId];
+  const adSets = activeData ? activeData.adSets : mockAdSetData[mockId];
+  const genders = activeData ? activeData.genders : mockGenderData[mockId];
 
   const fmt = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toString();
 
