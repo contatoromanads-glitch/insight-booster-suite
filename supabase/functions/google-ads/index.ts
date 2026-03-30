@@ -41,7 +41,7 @@ async function queryGoogleAds(accessToken: string, customerId: string, query: st
   const cleanId = customerId.replace(/-/g, '');
 
   const res = await fetch(
-    `https://googleads.googleapis.com/v18/customers/${cleanId}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/v19/customers/${cleanId}/googleAds:searchStream`,
     {
       method: 'POST',
       headers: {
