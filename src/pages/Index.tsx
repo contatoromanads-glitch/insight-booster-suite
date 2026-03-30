@@ -121,6 +121,11 @@ export default function Index() {
                   — {mccClients.find(c => c.id === subAccountId)?.name || subAccountId}
                 </span>
               )}
+              {isMetaAds && metaAccountId && metaAccounts.length > 0 && (
+                <span className="text-sm text-muted-foreground font-normal">
+                  — {metaAccounts.find(c => c.id === metaAccountId)?.name || metaAccountId}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
