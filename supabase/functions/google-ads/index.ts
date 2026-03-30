@@ -78,6 +78,14 @@ async function listAccessibleClients(
   accessToken: string,
   managerCustomerId: string,
 ): Promise<string[]> {
+  const clients = await listAccessibleClientsDetailed(accessToken, managerCustomerId);
+  return clients.map((c: any) => c.id);
+}
+
+async function listAccessibleClientsDetailed(
+  accessToken: string,
+  managerCustomerId: string,
+): Promise<{ id: string; name: string }[]> {
   const developerToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')!;
   const cleanId = managerCustomerId.replace(/-/g, '');
 
@@ -115,7 +123,10 @@ async function listAccessibleClients(
 
   const data = await res.json();
   const results = data?.[0]?.results || [];
-  return results.map((r: any) => r.customerClient.id);
+  return results.map((r: any) => ({
+    id: r.customerClient.id,
+    name: r.customerClient.descriptiveName || `Conta ${r.customerClient.id}`,
+  }));
 }
 
 serve(async (req) => {
