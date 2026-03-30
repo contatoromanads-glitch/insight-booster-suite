@@ -11,10 +11,33 @@ interface MetaAdsData {
   genders: GenderPerformance[];
 }
 
+export interface MetaAdAccount {
+  id: string;
+  name: string;
+}
+
 export function useMetaAds() {
   const [data, setData] = useState<MetaAdsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+
+  const fetchAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
+        body: { mode: 'list_accounts' },
+      });
+      if (fnError) throw fnError;
+      setAccounts(result.accounts || []);
+    } catch (err: any) {
+      console.error('Failed to list Meta ad accounts:', err);
+      setAccounts([]);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
 
   const fetchData = async (adAccountId?: string, dateFrom?: string, dateTo?: string) => {
     setLoading(true);
@@ -48,5 +71,5 @@ export function useMetaAds() {
     }
   };
 
-  return { data, loading, error, fetchData };
+  return { data, loading, error, fetchData, accounts, loadingAccounts, fetchAccounts };
 }
