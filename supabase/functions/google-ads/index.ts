@@ -124,7 +124,7 @@ serve(async (req) => {
   }
 
   try {
-    const { customer_id, date_from, date_to } = await req.json() as GoogleAdsRequest;
+    const { customer_id, date_from, date_to, mode, client_id } = await req.json() as GoogleAdsRequest;
 
     if (!customer_id) {
       return new Response(JSON.stringify({ error: 'customer_id is required' }), {
@@ -136,15 +136,35 @@ serve(async (req) => {
     const accessToken = await getAccessToken();
     const loginCustomerId = customer_id;
 
-    // Try to list client accounts (works if it's a manager account)
+    // Mode: list client accounts under MCC
+    if (mode === 'list_clients') {
+      try {
+        const clients = await listAccessibleClientsDetailed(accessToken, customer_id);
+        return new Response(JSON.stringify({ clients }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        // Not a manager account
+        return new Response(JSON.stringify({ clients: [{ id: customer_id.replace(/-/g, ''), name: 'Conta principal' }] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // If a specific client_id is provided, query only that one
     let clientIds: string[];
-    try {
-      clientIds = await listAccessibleClients(accessToken, customer_id);
-      console.log(`Manager account detected. Found ${clientIds.length} client accounts:`, clientIds);
-    } catch {
-      // Not a manager account — query directly
-      clientIds = [customer_id.replace(/-/g, '')];
-      console.log('Direct client account, querying directly.');
+    if (client_id) {
+      clientIds = [client_id.replace(/-/g, '')];
+      console.log(`Querying specific client: ${client_id}`);
+    } else {
+      // Try to list client accounts (works if it's a manager account)
+      try {
+        clientIds = await listAccessibleClients(accessToken, customer_id);
+        console.log(`Manager account detected. Found ${clientIds.length} client accounts:`, clientIds);
+      } catch {
+        clientIds = [customer_id.replace(/-/g, '')];
+        console.log('Direct client account, querying directly.');
+      }
     }
 
     if (clientIds.length === 0) {
