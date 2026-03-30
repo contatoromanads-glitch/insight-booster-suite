@@ -16,17 +16,18 @@ export function useMetaAds() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async (adAccountId: string, dateFrom?: string, dateTo?: string) => {
+  const fetchData = async (adAccountId?: string, dateFrom?: string, dateTo?: string) => {
     setLoading(true);
     setError(null);
 
     try {
+      const body: Record<string, string> = {};
+      if (adAccountId) body.ad_account_id = adAccountId;
+      if (dateFrom) body.date_from = dateFrom;
+      if (dateTo) body.date_to = dateTo;
+
       const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
-        body: {
-          ad_account_id: adAccountId,
-          date_from: dateFrom,
-          date_to: dateTo,
-        },
+        body,
       });
 
       if (fnError) throw fnError;

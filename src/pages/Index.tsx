@@ -68,7 +68,7 @@ export default function Index() {
     if (isGoogleAds && gadsAccount) {
       fetchGads(gadsAccount.customerId, from, to);
     } else if (isMetaAds && metaAccount) {
-      fetchMeta(metaAccount.adAccountId, from, to);
+      fetchMeta(metaAccount.adAccountId || undefined, from, to);
     }
   }, [clientId, period, isGoogleAds, isMetaAds]);
 
