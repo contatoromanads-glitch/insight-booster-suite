@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GRAPH_API = 'https://graph.facebook.com/v21.0';
+const GRAPH_API = 'https://graph.facebook.com/v25.0';
 
 interface MetaAdsRequest {
   ad_account_id: string;
