@@ -36,29 +36,84 @@ async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function queryGoogleAds(accessToken: string, customerId: string, query: string) {
+async function queryGoogleAds(
+  accessToken: string,
+  customerId: string,
+  query: string,
+  loginCustomerId?: string,
+) {
   const developerToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')!;
   const cleanId = customerId.replace(/-/g, '');
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    'Content-Type': 'application/json',
+  };
+
+  if (loginCustomerId) {
+    headers['login-customer-id'] = loginCustomerId.replace(/-/g, '');
+  }
 
   const res = await fetch(
     `https://googleads.googleapis.com/v23/customers/${cleanId}/googleAds:searchStream`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'developer-token': developerToken,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ query }),
     }
   );
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Google Ads API error: ${err}`);
+    throw new Error(`Google Ads API error (customer ${customerId}): ${err}`);
   }
 
   return await res.json();
+}
+
+async function listAccessibleClients(
+  accessToken: string,
+  managerCustomerId: string,
+): Promise<string[]> {
+  const developerToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')!;
+  const cleanId = managerCustomerId.replace(/-/g, '');
+
+  const query = `
+    SELECT
+      customer_client.id,
+      customer_client.descriptive_name,
+      customer_client.manager,
+      customer_client.status
+    FROM customer_client
+    WHERE customer_client.manager = false
+      AND customer_client.status = 'ENABLED'
+  `;
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    'Content-Type': 'application/json',
+    'login-customer-id': cleanId,
+  };
+
+  const res = await fetch(
+    `https://googleads.googleapis.com/v23/customers/${cleanId}/googleAds:searchStream`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Failed to list client accounts: ${err}`);
+  }
+
+  const data = await res.json();
+  const results = data?.[0]?.results || [];
+  return results.map((r: any) => r.customerClient.id);
 }
 
 serve(async (req) => {
@@ -77,121 +132,122 @@ serve(async (req) => {
     }
 
     const accessToken = await getAccessToken();
+    const loginCustomerId = customer_id;
+
+    // Try to list client accounts (works if it's a manager account)
+    let clientIds: string[];
+    try {
+      clientIds = await listAccessibleClients(accessToken, customer_id);
+      console.log(`Manager account detected. Found ${clientIds.length} client accounts:`, clientIds);
+    } catch {
+      // Not a manager account — query directly
+      clientIds = [customer_id.replace(/-/g, '')];
+      console.log('Direct client account, querying directly.');
+    }
+
+    if (clientIds.length === 0) {
+      return new Response(JSON.stringify({ error: 'No client accounts found under this manager account.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const dateFilter = date_from && date_to
       ? `segments.date BETWEEN '${date_from}' AND '${date_to}'`
       : `segments.date DURING LAST_30_DAYS`;
 
-    // Campaign performance summary
     const campaignQuery = `
       SELECT
-        metrics.cost_micros,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.ctr,
-        metrics.conversions,
-        metrics.cost_per_conversion,
+        metrics.cost_micros, metrics.impressions, metrics.clicks,
+        metrics.ctr, metrics.conversions, metrics.cost_per_conversion,
         metrics.conversions_value
       FROM campaign
-      WHERE ${dateFilter}
-        AND campaign.status != 'REMOVED'
+      WHERE ${dateFilter} AND campaign.status != 'REMOVED'
     `;
 
-    // Daily trend
     const trendQuery = `
       SELECT
-        segments.date,
-        metrics.cost_micros,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.conversions
+        segments.date, metrics.cost_micros, metrics.impressions,
+        metrics.clicks, metrics.conversions
       FROM campaign
-      WHERE ${dateFilter}
-        AND campaign.status != 'REMOVED'
+      WHERE ${dateFilter} AND campaign.status != 'REMOVED'
       ORDER BY segments.date ASC
     `;
 
-    // Ad group (ad set) performance
     const adGroupQuery = `
       SELECT
-        ad_group.id,
-        ad_group.name,
-        ad_group.status,
-        metrics.cost_micros,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.ctr,
-        metrics.conversions,
-        metrics.cost_per_conversion,
+        ad_group.id, ad_group.name, ad_group.status,
+        metrics.cost_micros, metrics.impressions, metrics.clicks,
+        metrics.ctr, metrics.conversions, metrics.cost_per_conversion,
         metrics.conversions_value
       FROM ad_group
-      WHERE ${dateFilter}
-        AND campaign.status != 'REMOVED'
+      WHERE ${dateFilter} AND campaign.status != 'REMOVED'
     `;
 
-    // Age performance
     const ageQuery = `
       SELECT
         ad_group_criterion.age_range.type,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.conversions,
-        metrics.cost_micros
+        metrics.impressions, metrics.clicks, metrics.conversions, metrics.cost_micros
       FROM age_range_view
       WHERE ${dateFilter}
     `;
 
-    // Gender performance
     const genderQuery = `
       SELECT
         ad_group_criterion.gender.type,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.conversions
+        metrics.impressions, metrics.clicks, metrics.conversions
       FROM gender_view
       WHERE ${dateFilter}
     `;
 
-    // Geographic performance
     const geoQuery = `
       SELECT
         geographic_view.country_criterion_id,
         campaign_criterion.location.geo_target_constant,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.conversions,
-        metrics.cost_micros
+        metrics.impressions, metrics.clicks, metrics.conversions, metrics.cost_micros
       FROM geographic_view
       WHERE ${dateFilter}
       ORDER BY metrics.impressions DESC
       LIMIT 10
     `;
 
-    const [campaignData, trendData, adGroupData, ageData, genderData, geoData] = await Promise.all([
-      queryGoogleAds(accessToken, customer_id, campaignQuery),
-      queryGoogleAds(accessToken, customer_id, trendQuery),
-      queryGoogleAds(accessToken, customer_id, adGroupQuery),
-      queryGoogleAds(accessToken, customer_id, ageQuery),
-      queryGoogleAds(accessToken, customer_id, genderQuery),
-      queryGoogleAds(accessToken, customer_id, geoQuery),
-    ]);
+    // Query all client accounts in parallel and aggregate
+    const allResults = await Promise.all(
+      clientIds.map(async (cid) => {
+        const isManager = clientIds.length > 1 || cid !== customer_id.replace(/-/g, '');
+        const loginId = isManager ? loginCustomerId : undefined;
 
-    // Process campaign KPI totals
-    const kpi = processCampaignKPIs(campaignData);
-    const trend = processTrend(trendData);
-    const adSets = processAdGroups(adGroupData);
-    const ages = processAgeData(ageData);
-    const genders = processGenderData(genderData);
-    const cities = processGeoData(geoData);
+        const [campaignData, trendData, adGroupData, ageData, genderData, geoData] = await Promise.all([
+          queryGoogleAds(accessToken, cid, campaignQuery, loginId).catch(e => { console.error(`Campaign query failed for ${cid}:`, e.message); return []; }),
+          queryGoogleAds(accessToken, cid, trendQuery, loginId).catch(e => { console.error(`Trend query failed for ${cid}:`, e.message); return []; }),
+          queryGoogleAds(accessToken, cid, adGroupQuery, loginId).catch(e => { console.error(`AdGroup query failed for ${cid}:`, e.message); return []; }),
+          queryGoogleAds(accessToken, cid, ageQuery, loginId).catch(e => { console.error(`Age query failed for ${cid}:`, e.message); return []; }),
+          queryGoogleAds(accessToken, cid, genderQuery, loginId).catch(e => { console.error(`Gender query failed for ${cid}:`, e.message); return []; }),
+          queryGoogleAds(accessToken, cid, geoQuery, loginId).catch(e => { console.error(`Geo query failed for ${cid}:`, e.message); return []; }),
+        ]);
 
-    return new Response(JSON.stringify({
-      kpi,
-      trend,
-      adSets,
-      ages,
-      genders,
-      cities,
-    }), {
+        return { campaignData, trendData, adGroupData, ageData, genderData, geoData };
+      })
+    );
+
+    // Aggregate data across all client accounts
+    const aggregated = {
+      campaignData: allResults.flatMap(r => r.campaignData?.[0]?.results || []),
+      trendData: allResults.flatMap(r => r.trendData?.[0]?.results || []),
+      adGroupData: allResults.flatMap(r => r.adGroupData?.[0]?.results || []),
+      ageData: allResults.flatMap(r => r.ageData?.[0]?.results || []),
+      genderData: allResults.flatMap(r => r.genderData?.[0]?.results || []),
+      geoData: allResults.flatMap(r => r.geoData?.[0]?.results || []),
+    };
+
+    const kpi = processCampaignKPIs(aggregated.campaignData);
+    const trend = processTrend(aggregated.trendData);
+    const adSets = processAdGroups(aggregated.adGroupData);
+    const ages = processAgeData(aggregated.ageData);
+    const genders = processGenderData(aggregated.genderData);
+    const cities = processGeoData(aggregated.geoData);
+
+    return new Response(JSON.stringify({ kpi, trend, adSets, ages, genders, cities }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
@@ -203,10 +259,11 @@ serve(async (req) => {
   }
 });
 
-function processCampaignKPIs(data: any) {
+// --- Data processing helpers ---
+
+function processCampaignKPIs(results: any[]) {
   let totalSpend = 0, impressions = 0, clicks = 0, conversions = 0, conversionValue = 0;
 
-  const results = data?.[0]?.results || [];
   for (const row of results) {
     const m = row.metrics;
     totalSpend += Number(m.costMicros || 0) / 1_000_000;
@@ -223,10 +280,9 @@ function processCampaignKPIs(data: any) {
   return { totalSpend, impressions, clicks, ctr, conversions, cpa, roas };
 }
 
-function processTrend(data: any) {
+function processTrend(results: any[]) {
   const dailyMap: Record<string, { spend: number; impressions: number; clicks: number; conversions: number }> = {};
 
-  const results = data?.[0]?.results || [];
   for (const row of results) {
     const date = row.segments.date;
     if (!dailyMap[date]) dailyMap[date] = { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
@@ -241,8 +297,7 @@ function processTrend(data: any) {
     .map(([date, d]) => ({ date, ...d }));
 }
 
-function processAdGroups(data: any) {
-  const results = data?.[0]?.results || [];
+function processAdGroups(results: any[]) {
   return results.map((row: any) => {
     const m = row.metrics;
     const spend = Number(m.costMicros || 0) / 1_000_000;
@@ -264,7 +319,7 @@ function processAdGroups(data: any) {
   });
 }
 
-function processAgeData(data: any) {
+function processAgeData(results: any[]) {
   const ageMap: Record<string, string> = {
     AGE_RANGE_18_24: '18-24',
     AGE_RANGE_25_34: '25-34',
@@ -275,7 +330,6 @@ function processAgeData(data: any) {
     AGE_RANGE_UNDETERMINED: 'Indeterminado',
   };
 
-  const results = data?.[0]?.results || [];
   return results.map((row: any) => ({
     ageGroup: ageMap[row.adGroupCriterion?.ageRange?.type] || row.adGroupCriterion?.ageRange?.type || 'N/A',
     impressions: Number(row.metrics.impressions || 0),
@@ -285,14 +339,13 @@ function processAgeData(data: any) {
   }));
 }
 
-function processGenderData(data: any) {
+function processGenderData(results: any[]) {
   const genderMap: Record<string, string> = {
     MALE: 'Masculino',
     FEMALE: 'Feminino',
     UNDETERMINED: 'Outros',
   };
 
-  const results = data?.[0]?.results || [];
   const totalImpressions = results.reduce((s: number, r: any) => s + Number(r.metrics.impressions || 0), 0);
 
   return results.map((row: any) => {
@@ -305,8 +358,7 @@ function processGenderData(data: any) {
   });
 }
 
-function processGeoData(data: any) {
-  const results = data?.[0]?.results || [];
+function processGeoData(results: any[]) {
   return results.map((row: any) => ({
     city: row.campaignCriterion?.location?.geoTargetConstant || 'N/A',
     impressions: Number(row.metrics.impressions || 0),
