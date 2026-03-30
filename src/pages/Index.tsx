@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { DollarSign, Eye, MousePointer, BarChart3, Target, TrendingUp, Percent, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { DollarSign, Eye, MousePointer, BarChart3, Target, TrendingUp, Percent, ChevronDown, LayoutDashboard, Loader2 } from 'lucide-react';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { TrendChart } from '@/components/dashboard/TrendChart';
 import { CityTable } from '@/components/dashboard/CityTable';
@@ -9,24 +9,64 @@ import { AdSetTable } from '@/components/dashboard/AdSetTable';
 import { GenderChart } from '@/components/dashboard/GenderChart';
 import { ChatPanel } from '@/components/dashboard/ChatPanel';
 import { DateFilter } from '@/components/dashboard/DateFilter';
+import { useGoogleAds } from '@/hooks/useGoogleAds';
 import {
-  clients, kpiData, trendData, cityData, ageData,
-  creativeData, adSetData, genderData,
+  clients as mockClients, kpiData as mockKpiData, trendData as mockTrendData,
+  cityData as mockCityData, ageData as mockAgeData,
+  creativeData as mockCreativeData, adSetData as mockAdSetData, genderData as mockGenderData,
 } from '@/data/mockData';
 
+// Google Ads accounts to monitor
+const googleAdsAccounts = [
+  { id: 'gads-1', name: 'Google Ads - 771-715-2917', customerId: '771-715-2917' },
+];
+
+// Combine real + mock clients
+const allClients = [
+  ...googleAdsAccounts.map(a => ({ id: a.id, name: a.name })),
+  ...mockClients.map(c => ({ id: `mock-${c.id}`, name: `[Demo] ${c.name}` })),
+];
+
 export default function Index() {
-  const [clientId, setClientId] = useState('1');
+  const [clientId, setClientId] = useState(googleAdsAccounts[0].id);
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
+  const { data: gadsData, loading, error, fetchData } = useGoogleAds();
 
-  const client = clients.find(c => c.id === clientId)!;
-  const kpi = kpiData[clientId];
-  const trend = trendData[clientId];
-  const cities = cityData[clientId];
-  const ages = ageData[clientId];
-  const creatives = creativeData[clientId];
-  const adSets = adSetData[clientId];
-  const genders = genderData[clientId];
+  const isGoogleAds = clientId.startsWith('gads-');
+  const gadsAccount = googleAdsAccounts.find(a => a.id === clientId);
+  const mockId = clientId.replace('mock-', '');
+
+  const getDateRange = useCallback(() => {
+    const now = new Date();
+    const to = now.toISOString().slice(0, 10);
+    let from: string;
+    switch (period) {
+      case '7d': from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10); break;
+      case '14d': from = new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10); break;
+      case '90d': from = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10); break;
+      default: from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10); break;
+    }
+    return { from, to };
+  }, [period]);
+
+  useEffect(() => {
+    if (isGoogleAds && gadsAccount) {
+      const { from, to } = getDateRange();
+      fetchData(gadsAccount.customerId, from, to);
+    }
+  }, [clientId, period, isGoogleAds]);
+
+  const client = allClients.find(c => c.id === clientId)!;
+
+  // Use real or mock data
+  const kpi = isGoogleAds && gadsData ? gadsData.kpi : mockKpiData[mockId];
+  const trend = isGoogleAds && gadsData ? gadsData.trend : mockTrendData[mockId];
+  const cities = isGoogleAds && gadsData ? gadsData.cities : mockCityData[mockId];
+  const ages = isGoogleAds && gadsData ? gadsData.ages : mockAgeData[mockId];
+  const creatives = isGoogleAds ? [] : mockCreativeData[mockId];
+  const adSets = isGoogleAds && gadsData ? gadsData.adSets : mockAdSetData[mockId];
+  const genders = isGoogleAds && gadsData ? gadsData.genders : mockGenderData[mockId];
 
   const fmt = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toString();
 
@@ -49,7 +89,7 @@ export default function Index() {
             </button>
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50">
-                {clients.map(c => (
+                {allClients.map(c => (
                   <button
                     key={c.id}
                     onClick={() => { setClientId(c.id); setClientOpen(false); }}
@@ -70,33 +110,51 @@ export default function Index() {
         {/* Date Filter */}
         <DateFilter value={period} onChange={setPeriod} />
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          <KPICard title="Investimento" value={`${fmt(kpi.totalSpend)}`} prefix="R$ " icon={<DollarSign className="w-4 h-4" />} currentValue={kpi.totalSpend} previousValue={kpi.prevSpend} delay={0} />
-          <KPICard title="Impressões" value={fmt(kpi.impressions)} icon={<Eye className="w-4 h-4" />} currentValue={kpi.impressions} previousValue={kpi.prevImpressions} delay={50} />
-          <KPICard title="Cliques" value={fmt(kpi.clicks)} icon={<MousePointer className="w-4 h-4" />} currentValue={kpi.clicks} previousValue={kpi.prevClicks} delay={100} />
-          <KPICard title="CTR" value={kpi.ctr.toFixed(1)} suffix="%" icon={<Percent className="w-4 h-4" />} currentValue={kpi.ctr} previousValue={kpi.prevCtr} delay={150} />
-          <KPICard title="Conversões" value={fmt(kpi.conversions)} icon={<Target className="w-4 h-4" />} currentValue={kpi.conversions} previousValue={kpi.prevConversions} delay={200} />
-          <KPICard title="CPA" value={kpi.cpa.toFixed(2)} prefix="R$ " icon={<BarChart3 className="w-4 h-4" />} currentValue={kpi.cpa} previousValue={kpi.prevCpa} delay={250} />
-          <KPICard title="ROAS" value={kpi.roas.toFixed(1)} suffix="x" icon={<TrendingUp className="w-4 h-4" />} currentValue={kpi.roas} previousValue={kpi.prevRoas} delay={300} />
-        </div>
+        {/* Loading / Error */}
+        {loading && (
+          <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Carregando dados do Google Ads...</span>
+          </div>
+        )}
 
-        {/* Trend */}
-        <TrendChart data={trend} />
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+            <strong>Erro:</strong> {error}
+          </div>
+        )}
 
-        {/* Two-column analysis */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CityTable data={cities} />
-          <AgeChart data={ages} />
-        </div>
+        {!loading && kpi && (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+              <KPICard title="Investimento" value={`${fmt(kpi.totalSpend)}`} prefix="R$ " icon={<DollarSign className="w-4 h-4" />} currentValue={kpi.totalSpend} previousValue={kpi.prevSpend} delay={0} />
+              <KPICard title="Impressões" value={fmt(kpi.impressions)} icon={<Eye className="w-4 h-4" />} currentValue={kpi.impressions} previousValue={kpi.prevImpressions} delay={50} />
+              <KPICard title="Cliques" value={fmt(kpi.clicks)} icon={<MousePointer className="w-4 h-4" />} currentValue={kpi.clicks} previousValue={kpi.prevClicks} delay={100} />
+              <KPICard title="CTR" value={kpi.ctr.toFixed(1)} suffix="%" icon={<Percent className="w-4 h-4" />} currentValue={kpi.ctr} previousValue={kpi.prevCtr} delay={150} />
+              <KPICard title="Conversões" value={fmt(kpi.conversions)} icon={<Target className="w-4 h-4" />} currentValue={kpi.conversions} previousValue={kpi.prevConversions} delay={200} />
+              <KPICard title="CPA" value={kpi.cpa.toFixed(2)} prefix="R$ " icon={<BarChart3 className="w-4 h-4" />} currentValue={kpi.cpa} previousValue={kpi.prevCpa} delay={250} />
+              <KPICard title="ROAS" value={kpi.roas.toFixed(1)} suffix="x" icon={<TrendingUp className="w-4 h-4" />} currentValue={kpi.roas} previousValue={kpi.prevRoas} delay={300} />
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CreativeGrid data={creatives} />
-          <GenderChart data={genders} />
-        </div>
+            {/* Trend */}
+            {trend && trend.length > 0 && <TrendChart data={trend} />}
 
-        {/* Ad Sets */}
-        <AdSetTable data={adSets} />
+            {/* Two-column analysis */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {cities && cities.length > 0 && <CityTable data={cities} />}
+              {ages && ages.length > 0 && <AgeChart data={ages} />}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {creatives && creatives.length > 0 && <CreativeGrid data={creatives} />}
+              {genders && genders.length > 0 && <GenderChart data={genders} />}
+            </div>
+
+            {/* Ad Sets */}
+            {adSets && adSets.length > 0 && <AdSetTable data={adSets} />}
+          </>
+        )}
       </main>
 
       {/* Chat */}
