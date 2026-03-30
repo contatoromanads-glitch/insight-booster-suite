@@ -130,7 +130,7 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-2">
             {/* Sub-account selector for MCC */}
-            {isGoogleAds && mccClients.length > 1 && (
+            {isGoogleAds && mccClients.length > 0 && (
               <div className="relative">
                 <button
                   onClick={() => setSubAccountOpen(!subAccountOpen)}
