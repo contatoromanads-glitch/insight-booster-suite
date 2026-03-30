@@ -40,8 +40,10 @@ export default function Index() {
   const [clientOpen, setClientOpen] = useState(false);
   const [subAccountId, setSubAccountId] = useState<string | null>(null);
   const [subAccountOpen, setSubAccountOpen] = useState(false);
+  const [metaAccountId, setMetaAccountId] = useState<string | null>(null);
+  const [metaAccountOpen, setMetaAccountOpen] = useState(false);
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads, clients: mccClients, loadingClients, fetchClients } = useGoogleAds();
-  const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
+  const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta, accounts: metaAccounts, loadingAccounts: metaLoadingAccounts, fetchAccounts: fetchMetaAccounts } = useMetaAds();
 
   const isGoogleAds = clientId.startsWith('gads-');
   const isMetaAds = clientId.startsWith('meta-');
@@ -73,15 +75,23 @@ export default function Index() {
     }
   }, [clientId, isGoogleAds]);
 
+  // Load Meta ad accounts when Meta Ads is selected
+  useEffect(() => {
+    if (isMetaAds) {
+      fetchMetaAccounts();
+      setMetaAccountId(null);
+    }
+  }, [clientId, isMetaAds]);
+
   // Fetch data when sub-account, period, or client changes
   useEffect(() => {
     const { from, to } = getDateRange();
     if (isGoogleAds && gadsAccount) {
       fetchGads(gadsAccount.customerId, from, to, subAccountId || undefined);
-    } else if (isMetaAds && metaAccount) {
-      fetchMeta(metaAccount.adAccountId || undefined, from, to);
+    } else if (isMetaAds) {
+      fetchMeta(metaAccountId || metaAccount?.adAccountId || undefined, from, to);
     }
-  }, [clientId, period, isGoogleAds, isMetaAds, subAccountId]);
+  }, [clientId, period, isGoogleAds, isMetaAds, subAccountId, metaAccountId]);
 
   const client = allClients.find(c => c.id === clientId)!;
 
