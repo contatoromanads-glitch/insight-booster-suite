@@ -170,7 +170,39 @@ export default function Index() {
                 )}
               </div>
             )}
-            {/* Main client selector */}
+            {/* Meta ad account selector */}
+            {isMetaAds && metaAccounts.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setMetaAccountOpen(!metaAccountOpen)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+                >
+                  {metaLoadingAccounts ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Carregando...</>
+                  ) : (
+                    <>
+                      {metaAccountId ? metaAccounts.find(c => c.id === metaAccountId)?.name || metaAccountId : 'Selecionar conta'}
+                      <ChevronDown className="w-3 h-3" />
+                    </>
+                  )}
+                </button>
+                {metaAccountOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-72 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-72 overflow-y-auto">
+                    {metaAccounts.map(a => (
+                      <button
+                        key={a.id}
+                        onClick={() => { setMetaAccountId(a.id); setMetaAccountOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
+                          a.id === metaAccountId ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                        }`}
+                      >
+                        {a.name} <span className="text-xs text-muted-foreground">({a.id})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="relative">
               <button
                 onClick={() => setClientOpen(!clientOpen)}
