@@ -9,6 +9,8 @@ interface GoogleAdsRequest {
   customer_id: string;
   date_from?: string;
   date_to?: string;
+  mode?: 'data' | 'list_clients';
+  client_id?: string; // specific client under MCC
 }
 
 async function getAccessToken(): Promise<string> {
@@ -76,6 +78,14 @@ async function listAccessibleClients(
   accessToken: string,
   managerCustomerId: string,
 ): Promise<string[]> {
+  const clients = await listAccessibleClientsDetailed(accessToken, managerCustomerId);
+  return clients.map((c: any) => c.id);
+}
+
+async function listAccessibleClientsDetailed(
+  accessToken: string,
+  managerCustomerId: string,
+): Promise<{ id: string; name: string }[]> {
   const developerToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')!;
   const cleanId = managerCustomerId.replace(/-/g, '');
 
@@ -113,7 +123,10 @@ async function listAccessibleClients(
 
   const data = await res.json();
   const results = data?.[0]?.results || [];
-  return results.map((r: any) => r.customerClient.id);
+  return results.map((r: any) => ({
+    id: r.customerClient.id,
+    name: r.customerClient.descriptiveName || `Conta ${r.customerClient.id}`,
+  }));
 }
 
 serve(async (req) => {
@@ -122,7 +135,7 @@ serve(async (req) => {
   }
 
   try {
-    const { customer_id, date_from, date_to } = await req.json() as GoogleAdsRequest;
+    const { customer_id, date_from, date_to, mode, client_id } = await req.json() as GoogleAdsRequest;
 
     if (!customer_id) {
       return new Response(JSON.stringify({ error: 'customer_id is required' }), {
@@ -134,15 +147,35 @@ serve(async (req) => {
     const accessToken = await getAccessToken();
     const loginCustomerId = customer_id;
 
-    // Try to list client accounts (works if it's a manager account)
+    // Mode: list client accounts under MCC
+    if (mode === 'list_clients') {
+      try {
+        const clients = await listAccessibleClientsDetailed(accessToken, customer_id);
+        return new Response(JSON.stringify({ clients }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        // Not a manager account
+        return new Response(JSON.stringify({ clients: [{ id: customer_id.replace(/-/g, ''), name: 'Conta principal' }] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // If a specific client_id is provided, query only that one
     let clientIds: string[];
-    try {
-      clientIds = await listAccessibleClients(accessToken, customer_id);
-      console.log(`Manager account detected. Found ${clientIds.length} client accounts:`, clientIds);
-    } catch {
-      // Not a manager account — query directly
-      clientIds = [customer_id.replace(/-/g, '')];
-      console.log('Direct client account, querying directly.');
+    if (client_id) {
+      clientIds = [client_id.replace(/-/g, '')];
+      console.log(`Querying specific client: ${client_id}`);
+    } else {
+      // Try to list client accounts (works if it's a manager account)
+      try {
+        clientIds = await listAccessibleClients(accessToken, customer_id);
+        console.log(`Manager account detected. Found ${clientIds.length} client accounts:`, clientIds);
+      } catch {
+        clientIds = [customer_id.replace(/-/g, '')];
+        console.log('Direct client account, querying directly.');
+      }
     }
 
     if (clientIds.length === 0) {

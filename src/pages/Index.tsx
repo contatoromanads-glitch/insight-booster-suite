@@ -38,7 +38,9 @@ export default function Index() {
   const [clientId, setClientId] = useState(googleAdsAccounts[0].id);
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
-  const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
+  const [subAccountId, setSubAccountId] = useState<string | null>(null);
+  const [subAccountOpen, setSubAccountOpen] = useState(false);
+  const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads, clients: mccClients, loadingClients, fetchClients } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
   const isGoogleAds = clientId.startsWith('gads-');
@@ -63,14 +65,23 @@ export default function Index() {
     return { from, to };
   }, [period]);
 
+  // Load MCC sub-accounts when a Google Ads account is selected
+  useEffect(() => {
+    if (isGoogleAds && gadsAccount) {
+      fetchClients(gadsAccount.customerId);
+      setSubAccountId(null);
+    }
+  }, [clientId, isGoogleAds]);
+
+  // Fetch data when sub-account, period, or client changes
   useEffect(() => {
     const { from, to } = getDateRange();
     if (isGoogleAds && gadsAccount) {
-      fetchGads(gadsAccount.customerId, from, to);
+      fetchGads(gadsAccount.customerId, from, to, subAccountId || undefined);
     } else if (isMetaAds && metaAccount) {
       fetchMeta(metaAccount.adAccountId || undefined, from, to);
     }
-  }, [clientId, period, isGoogleAds, isMetaAds]);
+  }, [clientId, period, isGoogleAds, isMetaAds, subAccountId]);
 
   const client = allClients.find(c => c.id === clientId)!;
 
@@ -95,29 +106,73 @@ export default function Index() {
             <LayoutDashboard className="w-5 h-5 text-primary" />
             <h1 className="text-base font-bold text-foreground">Dashboard de Campanhas</h1>
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setClientOpen(!clientOpen)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
-            >
-              {client.name}
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            {clientOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50">
-                {allClients.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => { setClientId(c.id); setClientOpen(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
-                      c.id === clientId ? 'text-primary bg-primary/5' : 'text-card-foreground'
-                    }`}
-                  >
-                    {c.name}
-                  </button>
-                ))}
+          <div className="flex items-center gap-2">
+            {/* Sub-account selector for MCC */}
+            {isGoogleAds && mccClients.length > 1 && (
+              <div className="relative">
+                <button
+                  onClick={() => setSubAccountOpen(!subAccountOpen)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+                >
+                  {loadingClients ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Carregando...</>
+                  ) : (
+                    <>
+                      {subAccountId ? mccClients.find(c => c.id === subAccountId)?.name || subAccountId : 'Todas as contas'}
+                      <ChevronDown className="w-3 h-3" />
+                    </>
+                  )}
+                </button>
+                {subAccountOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-72 overflow-y-auto">
+                    <button
+                      onClick={() => { setSubAccountId(null); setSubAccountOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
+                        !subAccountId ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                      }`}
+                    >
+                      Todas as contas (agregado)
+                    </button>
+                    {mccClients.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setSubAccountId(c.id); setSubAccountOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
+                          c.id === subAccountId ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                        }`}
+                      >
+                        {c.name} <span className="text-xs text-muted-foreground">({c.id})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
+            {/* Main client selector */}
+            <div className="relative">
+              <button
+                onClick={() => setClientOpen(!clientOpen)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
+              >
+                {client.name}
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              {clientOpen && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50">
+                  {allClients.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setClientId(c.id); setClientOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
+                        c.id === clientId ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>

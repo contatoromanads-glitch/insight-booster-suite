@@ -11,12 +11,35 @@ interface GoogleAdsData {
   genders: GenderPerformance[];
 }
 
+export interface GoogleAdsClient {
+  id: string;
+  name: string;
+}
+
 export function useGoogleAds() {
   const [data, setData] = useState<GoogleAdsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clients, setClients] = useState<GoogleAdsClient[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
 
-  const fetchData = async (customerId: string, dateFrom?: string, dateTo?: string) => {
+  const fetchClients = async (customerId: string) => {
+    setLoadingClients(true);
+    try {
+      const { data: result, error: fnError } = await supabase.functions.invoke('google-ads', {
+        body: { customer_id: customerId, mode: 'list_clients' },
+      });
+      if (fnError) throw fnError;
+      setClients(result.clients || []);
+    } catch (err: any) {
+      console.error('Failed to list MCC clients:', err);
+      setClients([]);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  const fetchData = async (customerId: string, dateFrom?: string, dateTo?: string, clientId?: string) => {
     setLoading(true);
     setError(null);
 
@@ -26,6 +49,7 @@ export function useGoogleAds() {
           customer_id: customerId,
           date_from: dateFrom,
           date_to: dateTo,
+          client_id: clientId,
         },
       });
 
@@ -56,5 +80,5 @@ export function useGoogleAds() {
     }
   };
 
-  return { data, loading, error, fetchData };
+  return { data, loading, error, fetchData, clients, loadingClients, fetchClients };
 }
