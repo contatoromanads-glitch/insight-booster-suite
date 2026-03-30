@@ -8,9 +8,10 @@ const corsHeaders = {
 const GRAPH_API = 'https://graph.facebook.com/v25.0';
 
 interface MetaAdsRequest {
-  ad_account_id: string;
+  ad_account_id?: string;
   date_from?: string;
   date_to?: string;
+  mode?: 'data' | 'list_accounts';
 }
 
 async function fetchInsights(accountId: string, accessToken: string, dateFrom: string, dateTo: string, fields: string, breakdowns?: string, level?: string) {
