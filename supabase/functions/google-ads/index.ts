@@ -9,6 +9,8 @@ interface GoogleAdsRequest {
   customer_id: string;
   date_from?: string;
   date_to?: string;
+  mode?: 'data' | 'list_clients';
+  client_id?: string; // specific client under MCC
 }
 
 async function getAccessToken(): Promise<string> {
