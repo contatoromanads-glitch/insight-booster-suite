@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { DollarSign, Eye, MousePointer, BarChart3, Target, TrendingUp, Percent, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { DollarSign, Eye, MousePointer, BarChart3, Target, TrendingUp, Percent, ChevronDown, LayoutDashboard, Loader2 } from 'lucide-react';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { TrendChart } from '@/components/dashboard/TrendChart';
 import { CityTable } from '@/components/dashboard/CityTable';
@@ -9,24 +9,64 @@ import { AdSetTable } from '@/components/dashboard/AdSetTable';
 import { GenderChart } from '@/components/dashboard/GenderChart';
 import { ChatPanel } from '@/components/dashboard/ChatPanel';
 import { DateFilter } from '@/components/dashboard/DateFilter';
+import { useGoogleAds } from '@/hooks/useGoogleAds';
 import {
-  clients, kpiData, trendData, cityData, ageData,
-  creativeData, adSetData, genderData,
+  clients as mockClients, kpiData as mockKpiData, trendData as mockTrendData,
+  cityData as mockCityData, ageData as mockAgeData,
+  creativeData as mockCreativeData, adSetData as mockAdSetData, genderData as mockGenderData,
 } from '@/data/mockData';
 
+// Google Ads accounts to monitor
+const googleAdsAccounts = [
+  { id: 'gads-1', name: 'Google Ads - 771-715-2917', customerId: '771-715-2917' },
+];
+
+// Combine real + mock clients
+const allClients = [
+  ...googleAdsAccounts.map(a => ({ id: a.id, name: a.name })),
+  ...mockClients.map(c => ({ id: `mock-${c.id}`, name: `[Demo] ${c.name}` })),
+];
+
 export default function Index() {
-  const [clientId, setClientId] = useState('1');
+  const [clientId, setClientId] = useState(googleAdsAccounts[0].id);
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
+  const { data: gadsData, loading, error, fetchData } = useGoogleAds();
 
-  const client = clients.find(c => c.id === clientId)!;
-  const kpi = kpiData[clientId];
-  const trend = trendData[clientId];
-  const cities = cityData[clientId];
-  const ages = ageData[clientId];
-  const creatives = creativeData[clientId];
-  const adSets = adSetData[clientId];
-  const genders = genderData[clientId];
+  const isGoogleAds = clientId.startsWith('gads-');
+  const gadsAccount = googleAdsAccounts.find(a => a.id === clientId);
+  const mockId = clientId.replace('mock-', '');
+
+  const getDateRange = useCallback(() => {
+    const now = new Date();
+    const to = now.toISOString().slice(0, 10);
+    let from: string;
+    switch (period) {
+      case '7d': from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10); break;
+      case '14d': from = new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10); break;
+      case '90d': from = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10); break;
+      default: from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10); break;
+    }
+    return { from, to };
+  }, [period]);
+
+  useEffect(() => {
+    if (isGoogleAds && gadsAccount) {
+      const { from, to } = getDateRange();
+      fetchData(gadsAccount.customerId, from, to);
+    }
+  }, [clientId, period, isGoogleAds]);
+
+  const client = allClients.find(c => c.id === clientId)!;
+
+  // Use real or mock data
+  const kpi = isGoogleAds && gadsData ? gadsData.kpi : mockKpiData[mockId];
+  const trend = isGoogleAds && gadsData ? gadsData.trend : mockTrendData[mockId];
+  const cities = isGoogleAds && gadsData ? gadsData.cities : mockCityData[mockId];
+  const ages = isGoogleAds && gadsData ? gadsData.ages : mockAgeData[mockId];
+  const creatives = isGoogleAds ? [] : mockCreativeData[mockId];
+  const adSets = isGoogleAds && gadsData ? gadsData.adSets : mockAdSetData[mockId];
+  const genders = isGoogleAds && gadsData ? gadsData.genders : mockGenderData[mockId];
 
   const fmt = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toString();
 
