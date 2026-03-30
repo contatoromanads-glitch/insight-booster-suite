@@ -110,33 +110,51 @@ export default function Index() {
         {/* Date Filter */}
         <DateFilter value={period} onChange={setPeriod} />
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          <KPICard title="Investimento" value={`${fmt(kpi.totalSpend)}`} prefix="R$ " icon={<DollarSign className="w-4 h-4" />} currentValue={kpi.totalSpend} previousValue={kpi.prevSpend} delay={0} />
-          <KPICard title="Impressões" value={fmt(kpi.impressions)} icon={<Eye className="w-4 h-4" />} currentValue={kpi.impressions} previousValue={kpi.prevImpressions} delay={50} />
-          <KPICard title="Cliques" value={fmt(kpi.clicks)} icon={<MousePointer className="w-4 h-4" />} currentValue={kpi.clicks} previousValue={kpi.prevClicks} delay={100} />
-          <KPICard title="CTR" value={kpi.ctr.toFixed(1)} suffix="%" icon={<Percent className="w-4 h-4" />} currentValue={kpi.ctr} previousValue={kpi.prevCtr} delay={150} />
-          <KPICard title="Conversões" value={fmt(kpi.conversions)} icon={<Target className="w-4 h-4" />} currentValue={kpi.conversions} previousValue={kpi.prevConversions} delay={200} />
-          <KPICard title="CPA" value={kpi.cpa.toFixed(2)} prefix="R$ " icon={<BarChart3 className="w-4 h-4" />} currentValue={kpi.cpa} previousValue={kpi.prevCpa} delay={250} />
-          <KPICard title="ROAS" value={kpi.roas.toFixed(1)} suffix="x" icon={<TrendingUp className="w-4 h-4" />} currentValue={kpi.roas} previousValue={kpi.prevRoas} delay={300} />
-        </div>
+        {/* Loading / Error */}
+        {loading && (
+          <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Carregando dados do Google Ads...</span>
+          </div>
+        )}
 
-        {/* Trend */}
-        <TrendChart data={trend} />
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+            <strong>Erro:</strong> {error}
+          </div>
+        )}
 
-        {/* Two-column analysis */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CityTable data={cities} />
-          <AgeChart data={ages} />
-        </div>
+        {!loading && kpi && (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+              <KPICard title="Investimento" value={`${fmt(kpi.totalSpend)}`} prefix="R$ " icon={<DollarSign className="w-4 h-4" />} currentValue={kpi.totalSpend} previousValue={kpi.prevSpend} delay={0} />
+              <KPICard title="Impressões" value={fmt(kpi.impressions)} icon={<Eye className="w-4 h-4" />} currentValue={kpi.impressions} previousValue={kpi.prevImpressions} delay={50} />
+              <KPICard title="Cliques" value={fmt(kpi.clicks)} icon={<MousePointer className="w-4 h-4" />} currentValue={kpi.clicks} previousValue={kpi.prevClicks} delay={100} />
+              <KPICard title="CTR" value={kpi.ctr.toFixed(1)} suffix="%" icon={<Percent className="w-4 h-4" />} currentValue={kpi.ctr} previousValue={kpi.prevCtr} delay={150} />
+              <KPICard title="Conversões" value={fmt(kpi.conversions)} icon={<Target className="w-4 h-4" />} currentValue={kpi.conversions} previousValue={kpi.prevConversions} delay={200} />
+              <KPICard title="CPA" value={kpi.cpa.toFixed(2)} prefix="R$ " icon={<BarChart3 className="w-4 h-4" />} currentValue={kpi.cpa} previousValue={kpi.prevCpa} delay={250} />
+              <KPICard title="ROAS" value={kpi.roas.toFixed(1)} suffix="x" icon={<TrendingUp className="w-4 h-4" />} currentValue={kpi.roas} previousValue={kpi.prevRoas} delay={300} />
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CreativeGrid data={creatives} />
-          <GenderChart data={genders} />
-        </div>
+            {/* Trend */}
+            {trend && trend.length > 0 && <TrendChart data={trend} />}
 
-        {/* Ad Sets */}
-        <AdSetTable data={adSets} />
+            {/* Two-column analysis */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {cities && cities.length > 0 && <CityTable data={cities} />}
+              {ages && ages.length > 0 && <AgeChart data={ages} />}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {creatives && creatives.length > 0 && <CreativeGrid data={creatives} />}
+              {genders && genders.length > 0 && <GenderChart data={genders} />}
+            </div>
+
+            {/* Ad Sets */}
+            {adSets && adSets.length > 0 && <AdSetTable data={adSets} />}
+          </>
+        )}
       </main>
 
       {/* Chat */}
