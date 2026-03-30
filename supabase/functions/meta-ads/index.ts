@@ -85,6 +85,21 @@ serve(async (req) => {
     if (!accessToken) throw new Error('META_ACCESS_TOKEN not configured');
 
     const body: MetaAdsRequest = await req.json();
+
+    // Mode: list ad accounts accessible to the token
+    if (body.mode === 'list_accounts') {
+      const url = `${GRAPH_API}/me/adaccounts?access_token=${accessToken}&fields=account_id,name,account_status&limit=100`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) throw new Error(`Meta API error: ${JSON.stringify(data.error)}`);
+      const accounts = (data.data || [])
+        .filter((a: any) => a.account_status === 1) // 1 = ACTIVE
+        .map((a: any) => ({ id: a.account_id, name: a.name || `Conta ${a.account_id}` }));
+      return new Response(JSON.stringify({ accounts }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const accountId = body.ad_account_id || Deno.env.get('META_AD_ACCOUNT_ID');
     if (!accountId) throw new Error('No ad account ID provided');
 
