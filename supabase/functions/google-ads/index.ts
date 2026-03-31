@@ -151,12 +151,17 @@ serve(async (req) => {
     if (mode === 'list_clients') {
       try {
         const clients = await listAccessibleClientsDetailed(accessToken, customer_id);
+        console.log(`list_clients returned ${clients.length} clients for ${customer_id}`);
         return new Response(JSON.stringify({ clients }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      } catch (e) {
-        // Not a manager account
-        return new Response(JSON.stringify({ clients: [{ id: customer_id.replace(/-/g, ''), name: 'Conta principal' }] }), {
+      } catch (e: any) {
+        console.error('list_clients failed:', e.message);
+        // Return fallback but include the error so frontend can show it
+        return new Response(JSON.stringify({ 
+          clients: [{ id: customer_id.replace(/-/g, ''), name: 'Conta principal' }],
+          warning: `Não foi possível listar subcontas: ${e.message}`,
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
