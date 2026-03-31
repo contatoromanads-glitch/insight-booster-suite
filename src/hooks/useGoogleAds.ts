@@ -30,6 +30,9 @@ export function useGoogleAds() {
         body: { customer_id: customerId, mode: 'list_clients' },
       });
       if (fnError) throw fnError;
+      if (result.warning) {
+        console.warn('MCC warning:', result.warning);
+      }
       setClients(result.clients || []);
     } catch (err: any) {
       console.error('Failed to list MCC clients:', err);
