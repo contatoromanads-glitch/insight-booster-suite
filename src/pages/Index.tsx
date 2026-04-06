@@ -126,7 +126,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <LayoutDashboard className="w-5 h-5 text-primary" />
             <div>
-              <h1 className="text-base font-bold text-foreground">{client.name}</h1>
+              <h1 className="text-base font-bold text-foreground">{displayName}</h1>
               <p className="text-xs text-muted-foreground">Dashboard de Campanhas</p>
             </div>
           </div>
