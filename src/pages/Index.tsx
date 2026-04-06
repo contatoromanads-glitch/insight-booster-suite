@@ -32,9 +32,10 @@ export default function Index() {
     const to = now.toISOString().slice(0, 10);
     let from: string;
     switch (period) {
+      case 'today': from = to; break;
       case '7d': from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10); break;
-      case '14d': from = new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10); break;
-      case '90d': from = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10); break;
+      case 'month': from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10); break;
+      case 'year': from = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10); break;
       default: from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10); break;
     }
     return { from, to };
