@@ -14,16 +14,18 @@ import { useMetaAds } from '@/hooks/useMetaAds';
 import { clientsConfig, MCC_CUSTOMER_ID } from '@/data/clientsConfig';
 
 export default function Index() {
-  const [selectedClientId, setSelectedClientId] = useState(clientsConfig[0].id);
+  const [selectedClientId, setSelectedClientId] = useState('all');
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
 
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
-  const client = clientsConfig.find(c => c.id === selectedClientId)!;
-  const hasGoogle = !!client.googleAdsId;
-  const hasMeta = !!client.metaAdsId;
+  const isAll = selectedClientId === 'all';
+  const client = isAll ? null : clientsConfig.find(c => c.id === selectedClientId)!;
+  const displayName = isAll ? 'Todos os Clientes' : client!.name;
+  const hasGoogle = isAll || !!client?.googleAdsId;
+  const hasMeta = isAll || !!client?.metaAdsId;
 
   const loading = (hasGoogle && gadsLoading) || (hasMeta && metaLoading);
 
