@@ -46,11 +46,16 @@ export default function Index() {
   // Fetch data when client or period changes
   useEffect(() => {
     const { from, to } = getDateRange();
-    if (hasGoogle) {
-      fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
-    }
-    if (hasMeta) {
-      fetchMeta(client.metaAdsId, from, to);
+    if (isAll) {
+      fetchGads(MCC_CUSTOMER_ID, from, to);
+      fetchMeta(undefined, from, to);
+    } else {
+      if (client?.googleAdsId) {
+        fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
+      }
+      if (client?.metaAdsId) {
+        fetchMeta(client.metaAdsId, from, to);
+      }
     }
   }, [selectedClientId, period]);
 
