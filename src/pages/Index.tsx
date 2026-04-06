@@ -135,12 +135,20 @@ export default function Index() {
               onClick={() => setClientOpen(!clientOpen)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
             >
-              {client.name}
+              {displayName}
               <ChevronDown className="w-4 h-4" />
             </button>
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-80 overflow-y-auto">
-                {clientsConfig.map(c => (
+                <button
+                  onClick={() => { setSelectedClientId('all'); setClientOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors ${
+                    isAll ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                  }`}
+                >
+                  Todos os Clientes
+                </button>
+                <div className="border-t border-border" />
                   <button
                     key={c.id}
                     onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
