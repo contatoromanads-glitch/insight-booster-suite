@@ -14,16 +14,18 @@ import { useMetaAds } from '@/hooks/useMetaAds';
 import { clientsConfig, MCC_CUSTOMER_ID } from '@/data/clientsConfig';
 
 export default function Index() {
-  const [selectedClientId, setSelectedClientId] = useState(clientsConfig[0].id);
+  const [selectedClientId, setSelectedClientId] = useState('all');
   const [period, setPeriod] = useState('30d');
   const [clientOpen, setClientOpen] = useState(false);
 
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
-  const client = clientsConfig.find(c => c.id === selectedClientId)!;
-  const hasGoogle = !!client.googleAdsId;
-  const hasMeta = !!client.metaAdsId;
+  const isAll = selectedClientId === 'all';
+  const client = isAll ? null : clientsConfig.find(c => c.id === selectedClientId)!;
+  const displayName = isAll ? 'Todos os Clientes' : client!.name;
+  const hasGoogle = isAll || !!client?.googleAdsId;
+  const hasMeta = isAll || !!client?.metaAdsId;
 
   const loading = (hasGoogle && gadsLoading) || (hasMeta && metaLoading);
 
@@ -44,11 +46,16 @@ export default function Index() {
   // Fetch data when client or period changes
   useEffect(() => {
     const { from, to } = getDateRange();
-    if (hasGoogle) {
-      fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
-    }
-    if (hasMeta) {
-      fetchMeta(client.metaAdsId, from, to);
+    if (isAll) {
+      fetchGads(MCC_CUSTOMER_ID, from, to);
+      fetchMeta(undefined, from, to);
+    } else {
+      if (client?.googleAdsId) {
+        fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
+      }
+      if (client?.metaAdsId) {
+        fetchMeta(client.metaAdsId, from, to);
+      }
     }
   }, [selectedClientId, period]);
 
@@ -119,7 +126,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <LayoutDashboard className="w-5 h-5 text-primary" />
             <div>
-              <h1 className="text-base font-bold text-foreground">{client.name}</h1>
+              <h1 className="text-base font-bold text-foreground">{displayName}</h1>
               <p className="text-xs text-muted-foreground">Dashboard de Campanhas</p>
             </div>
           </div>
@@ -128,11 +135,20 @@ export default function Index() {
               onClick={() => setClientOpen(!clientOpen)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
             >
-              {client.name}
+              {displayName}
               <ChevronDown className="w-4 h-4" />
             </button>
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-80 overflow-y-auto">
+                <button
+                  onClick={() => { setSelectedClientId('all'); setClientOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors ${
+                    isAll ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                  }`}
+                >
+                  Todos os Clientes
+                </button>
+                <div className="border-t border-border" />
                 {clientsConfig.map(c => (
                   <button
                     key={c.id}
@@ -166,7 +182,7 @@ export default function Index() {
         {hasMeta && renderPlatformSection('Meta Ads', metaData, metaLoading, metaError)}
       </main>
 
-      <ChatPanel clientName={client.name} />
+      <ChatPanel clientName={displayName} />
     </div>
   );
 }
