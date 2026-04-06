@@ -65,7 +65,15 @@ export function useMetaAds() {
       });
     } catch (err: any) {
       console.error('Meta Ads fetch error:', err);
-      setError(err.message || 'Erro ao buscar dados do Meta Ads');
+      let message = err.message || 'Erro ao buscar dados do Meta Ads';
+      // Try to extract the actual error body from FunctionsHttpError
+      if (err.context?.body) {
+        try {
+          const body = await err.context.body.json?.() || err.context.body;
+          if (typeof body === 'object' && body.error) message = body.error;
+        } catch {}
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
