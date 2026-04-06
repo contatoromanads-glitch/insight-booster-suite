@@ -26,7 +26,7 @@ export function GenderChart({ data }: Props) {
         </div>
         <div className="space-y-2.5">
           {data.map((g, i) => (
-            <div key={g.gender} className="flex items-center gap-2">
+            <div key={`${g.gender}-${i}`} className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i] }} />
               <span className="text-xs text-muted-foreground w-20">{g.gender}</span>
               <span className="text-xs font-semibold text-foreground">{g.value}%</span>
