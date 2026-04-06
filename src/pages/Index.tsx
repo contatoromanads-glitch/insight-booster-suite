@@ -149,6 +149,7 @@ export default function Index() {
                   Todos os Clientes
                 </button>
                 <div className="border-t border-border" />
+                {clientsConfig.map(c => (
                   <button
                     key={c.id}
                     onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
