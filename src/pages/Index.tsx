@@ -182,7 +182,7 @@ export default function Index() {
         {hasMeta && renderPlatformSection('Meta Ads', metaData, metaLoading, metaError)}
       </main>
 
-      <ChatPanel clientName={client.name} />
+      <ChatPanel clientName={displayName} />
     </div>
   );
 }
