@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   DollarSign,
   Eye,
@@ -29,37 +29,16 @@ export default function Index() {
   const [period, setPeriod] = useState("30d");
   const [clientOpen, setClientOpen] = useState(false);
 
-  // CORREÇÃO: Adicionado Ref para permitir fechar o Select ao clicar fora
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // CORREÇÃO: Fechar modal de cliente quando clicar em qualquer outro lugar da tela
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setClientOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
   const isAll = selectedClientId === "all";
-
-  // CORREÇÃO: Removido o '!' perigoso. Se o cliente não existir, retorna undefined suavemente.
-  const client = isAll ? null : clientsConfig.find((c) => c.id === selectedClientId);
-
-  // CORREÇÃO: Fallback amigável caso o client não seja encontrado na base.
-  const displayName = isAll ? "Todos os Clientes" : client?.name || "Cliente não encontrado";
-
+  const client = isAll ? null : clientsConfig.find((c) => c.id === selectedClientId)!;
+  const displayName = isAll ? "Todos os Clientes" : client!.name;
   const hasGoogle = isAll || !!client?.googleAdsId;
   const hasMeta = isAll || !!client?.metaAdsId;
 
-  // CORREÇÃO: Extração de valores simples para passar no hook de efeito (evita refetchs desnecessários)
-  const googleAdsId = client?.googleAdsId;
-  const metaAdsId = client?.metaAdsId;
+  const loading = (hasGoogle && gadsLoading) || (hasMeta && metaLoading);
 
   const getDateRange = useCallback(() => {
     const now = new Date();
@@ -85,27 +64,24 @@ export default function Index() {
     return { from, to };
   }, [period]);
 
-  // CORREÇÃO: Array de dependências rigoroso e atualizado!
+  // Fetch data when client or period changes
   useEffect(() => {
     const { from, to } = getDateRange();
-
     if (isAll) {
       fetchGads(MCC_CUSTOMER_ID, from, to);
       fetchMeta(undefined, from, to);
     } else {
-      if (googleAdsId) fetchGads(MCC_CUSTOMER_ID, from, to, googleAdsId);
-      if (metaAdsId) fetchMeta(metaAdsId, from, to);
+      if (client?.googleAdsId) {
+        fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
+      }
+      if (client?.metaAdsId) {
+        fetchMeta(client.metaAdsId, from, to);
+      }
     }
-    // IMPORTANT: As funções fetchGads e fetchMeta devem estar dentro de um useCallback
-    // lá dentro dos hooks customizados originais, senão isso fará queries infinitas.
-  }, [isAll, googleAdsId, metaAdsId, getDateRange, fetchGads, fetchMeta]);
+  }, [selectedClientId, period]);
 
-  // Função helper otimizada
-  const fmt = (n: number) => {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-    if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-    return n.toString();
-  };
+  const fmt = (n: number) =>
+    n >= 1000000 ? (n / 1000000).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "K" : n.toString();
 
   const renderPlatformSection = (label: string, data: any, platformLoading: boolean, platformError: string | null) => {
     if (platformLoading) {
@@ -224,9 +200,7 @@ export default function Index() {
               <p className="text-xs text-muted-foreground">Dashboard de Campanhas</p>
             </div>
           </div>
-
-          {/* CORREÇÃO: ref adicionado aqui para controle de fechamento ao clicar fora do componente */}
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative">
             <button
               onClick={() => setClientOpen(!clientOpen)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
