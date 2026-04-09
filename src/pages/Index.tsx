@@ -1,72 +1,113 @@
-import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Eye, MousePointer, BarChart3, Target, TrendingUp, Percent, ChevronDown, LayoutDashboard, Loader2 } from 'lucide-react';
-import { KPICard } from '@/components/dashboard/KPICard';
-import { TrendChart } from '@/components/dashboard/TrendChart';
-import { CityTable } from '@/components/dashboard/CityTable';
-import { AgeChart } from '@/components/dashboard/AgeChart';
-import { CreativeGrid } from '@/components/dashboard/CreativeGrid';
-import { AdSetTable } from '@/components/dashboard/AdSetTable';
-import { GenderChart } from '@/components/dashboard/GenderChart';
-import { ChatPanel } from '@/components/dashboard/ChatPanel';
-import { DateFilter } from '@/components/dashboard/DateFilter';
-import { useGoogleAds } from '@/hooks/useGoogleAds';
-import { useMetaAds } from '@/hooks/useMetaAds';
-import { clientsConfig, MCC_CUSTOMER_ID } from '@/data/clientsConfig';
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  DollarSign,
+  Eye,
+  MousePointer,
+  BarChart3,
+  Target,
+  TrendingUp,
+  Percent,
+  ChevronDown,
+  LayoutDashboard,
+  Loader2,
+} from "lucide-react";
+import { KPICard } from "@/components/dashboard/KPICard";
+import { TrendChart } from "@/components/dashboard/TrendChart";
+import { CityTable } from "@/components/dashboard/CityTable";
+import { AgeChart } from "@/components/dashboard/AgeChart";
+import { CreativeGrid } from "@/components/dashboard/CreativeGrid";
+import { AdSetTable } from "@/components/dashboard/AdSetTable";
+import { GenderChart } from "@/components/dashboard/GenderChart";
+import { ChatPanel } from "@/components/dashboard/ChatPanel";
+import { DateFilter } from "@/components/dashboard/DateFilter";
+import { useGoogleAds } from "@/hooks/useGoogleAds";
+import { useMetaAds } from "@/hooks/useMetaAds";
+import { clientsConfig, MCC_CUSTOMER_ID } from "@/data/clientsConfig";
 
 export default function Index() {
-  const [selectedClientId, setSelectedClientId] = useState('all');
-  const [period, setPeriod] = useState('30d');
+  const [selectedClientId, setSelectedClientId] = useState("all");
+  const [period, setPeriod] = useState("30d");
   const [clientOpen, setClientOpen] = useState(false);
+
+  // CORREÇÃO: Adicionado Ref para permitir fechar o Select ao clicar fora
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // CORREÇÃO: Fechar modal de cliente quando clicar em qualquer outro lugar da tela
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setClientOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
-  const isAll = selectedClientId === 'all';
-  const client = isAll ? null : clientsConfig.find(c => c.id === selectedClientId)!;
-  const displayName = isAll ? 'Todos os Clientes' : client!.name;
+  const isAll = selectedClientId === "all";
+
+  // CORREÇÃO: Removido o '!' perigoso. Se o cliente não existir, retorna undefined suavemente.
+  const client = isAll ? null : clientsConfig.find((c) => c.id === selectedClientId);
+
+  // CORREÇÃO: Fallback amigável caso o client não seja encontrado na base.
+  const displayName = isAll ? "Todos os Clientes" : client?.name || "Cliente não encontrado";
+
   const hasGoogle = isAll || !!client?.googleAdsId;
   const hasMeta = isAll || !!client?.metaAdsId;
 
-  const loading = (hasGoogle && gadsLoading) || (hasMeta && metaLoading);
+  // CORREÇÃO: Extração de valores simples para passar no hook de efeito (evita refetchs desnecessários)
+  const googleAdsId = client?.googleAdsId;
+  const metaAdsId = client?.metaAdsId;
 
   const getDateRange = useCallback(() => {
     const now = new Date();
     const to = now.toISOString().slice(0, 10);
     let from: string;
     switch (period) {
-      case 'today': from = to; break;
-      case '7d': from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10); break;
-      case 'month': from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10); break;
-      case 'year': from = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10); break;
-      default: from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10); break;
+      case "today":
+        from = to;
+        break;
+      case "7d":
+        from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+        break;
+      case "month":
+        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        break;
+      case "year":
+        from = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+        break;
+      default:
+        from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+        break;
     }
     return { from, to };
   }, [period]);
 
-  // Fetch data when client or period changes
+  // CORREÇÃO: Array de dependências rigoroso e atualizado!
   useEffect(() => {
     const { from, to } = getDateRange();
+
     if (isAll) {
       fetchGads(MCC_CUSTOMER_ID, from, to);
       fetchMeta(undefined, from, to);
     } else {
-      if (client?.googleAdsId) {
-        fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
-      }
-      if (client?.metaAdsId) {
-        fetchMeta(client.metaAdsId, from, to);
-      }
+      if (googleAdsId) fetchGads(MCC_CUSTOMER_ID, from, to, googleAdsId);
+      if (metaAdsId) fetchMeta(metaAdsId, from, to);
     }
-  }, [selectedClientId, period]);
+    // IMPORTANT: As funções fetchGads e fetchMeta devem estar dentro de um useCallback
+    // lá dentro dos hooks customizados originais, senão isso fará queries infinitas.
+  }, [isAll, googleAdsId, metaAdsId, getDateRange, fetchGads, fetchMeta]);
 
-  const fmt = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toString();
+  // Função helper otimizada
+  const fmt = (n: number) => {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+    if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+    return n.toString();
+  };
 
-  const renderPlatformSection = (
-    label: string,
-    data: any,
-    platformLoading: boolean,
-    platformError: string | null,
-  ) => {
+  const renderPlatformSection = (label: string, data: any, platformLoading: boolean, platformError: string | null) => {
     if (platformLoading) {
       return (
         <div className="flex items-center justify-center py-8 gap-3 text-muted-foreground">
@@ -93,13 +134,66 @@ export default function Index() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{label}</h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          <KPICard title="Investimento" value={`${fmt(kpi.totalSpend)}`} prefix="R$ " icon={<DollarSign className="w-4 h-4" />} currentValue={kpi.totalSpend} previousValue={kpi.prevSpend} delay={0} />
-          <KPICard title="Impressões" value={fmt(kpi.impressions)} icon={<Eye className="w-4 h-4" />} currentValue={kpi.impressions} previousValue={kpi.prevImpressions} delay={50} />
-          <KPICard title="Cliques" value={fmt(kpi.clicks)} icon={<MousePointer className="w-4 h-4" />} currentValue={kpi.clicks} previousValue={kpi.prevClicks} delay={100} />
-          <KPICard title="CTR" value={kpi.ctr.toFixed(1)} suffix="%" icon={<Percent className="w-4 h-4" />} currentValue={kpi.ctr} previousValue={kpi.prevCtr} delay={150} />
-          <KPICard title="Conversões" value={fmt(kpi.conversions)} icon={<Target className="w-4 h-4" />} currentValue={kpi.conversions} previousValue={kpi.prevConversions} delay={200} />
-          <KPICard title="CPA" value={kpi.cpa.toFixed(2)} prefix="R$ " icon={<BarChart3 className="w-4 h-4" />} currentValue={kpi.cpa} previousValue={kpi.prevCpa} delay={250} />
-          <KPICard title="ROAS" value={kpi.roas.toFixed(1)} suffix="x" icon={<TrendingUp className="w-4 h-4" />} currentValue={kpi.roas} previousValue={kpi.prevRoas} delay={300} />
+          <KPICard
+            title="Investimento"
+            value={`${fmt(kpi.totalSpend)}`}
+            prefix="R$ "
+            icon={<DollarSign className="w-4 h-4" />}
+            currentValue={kpi.totalSpend}
+            previousValue={kpi.prevSpend}
+            delay={0}
+          />
+          <KPICard
+            title="Impressões"
+            value={fmt(kpi.impressions)}
+            icon={<Eye className="w-4 h-4" />}
+            currentValue={kpi.impressions}
+            previousValue={kpi.prevImpressions}
+            delay={50}
+          />
+          <KPICard
+            title="Cliques"
+            value={fmt(kpi.clicks)}
+            icon={<MousePointer className="w-4 h-4" />}
+            currentValue={kpi.clicks}
+            previousValue={kpi.prevClicks}
+            delay={100}
+          />
+          <KPICard
+            title="CTR"
+            value={kpi.ctr.toFixed(1)}
+            suffix="%"
+            icon={<Percent className="w-4 h-4" />}
+            currentValue={kpi.ctr}
+            previousValue={kpi.prevCtr}
+            delay={150}
+          />
+          <KPICard
+            title="Conversões"
+            value={fmt(kpi.conversions)}
+            icon={<Target className="w-4 h-4" />}
+            currentValue={kpi.conversions}
+            previousValue={kpi.prevConversions}
+            delay={200}
+          />
+          <KPICard
+            title="CPA"
+            value={kpi.cpa.toFixed(2)}
+            prefix="R$ "
+            icon={<BarChart3 className="w-4 h-4" />}
+            currentValue={kpi.cpa}
+            previousValue={kpi.prevCpa}
+            delay={250}
+          />
+          <KPICard
+            title="ROAS"
+            value={kpi.roas.toFixed(1)}
+            suffix="x"
+            icon={<TrendingUp className="w-4 h-4" />}
+            currentValue={kpi.roas}
+            previousValue={kpi.prevRoas}
+            delay={300}
+          />
         </div>
 
         {trend && trend.length > 0 && <TrendChart data={trend} />}
@@ -130,7 +224,9 @@ export default function Index() {
               <p className="text-xs text-muted-foreground">Dashboard de Campanhas</p>
             </div>
           </div>
-          <div className="relative">
+
+          {/* CORREÇÃO: ref adicionado aqui para controle de fechamento ao clicar fora do componente */}
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setClientOpen(!clientOpen)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
@@ -141,25 +237,37 @@ export default function Index() {
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-80 overflow-y-auto">
                 <button
-                  onClick={() => { setSelectedClientId('all'); setClientOpen(false); }}
+                  onClick={() => {
+                    setSelectedClientId("all");
+                    setClientOpen(false);
+                  }}
                   className={`w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors ${
-                    isAll ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                    isAll ? "text-primary bg-primary/5" : "text-card-foreground"
                   }`}
                 >
                   Todos os Clientes
                 </button>
                 <div className="border-t border-border" />
-                {clientsConfig.map(c => (
+                {clientsConfig.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
+                    onClick={() => {
+                      setSelectedClientId(c.id);
+                      setClientOpen(false);
+                    }}
                     className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
-                      c.id === selectedClientId ? 'text-primary bg-primary/5' : 'text-card-foreground'
+                      c.id === selectedClientId ? "text-primary bg-primary/5" : "text-card-foreground"
                     }`}
                   >
                     <span>{c.name}</span>
                     <span className="ml-2 text-xs text-muted-foreground">
-                      {c.googleAdsId && c.metaAdsId ? 'Google + Meta' : c.googleAdsId ? 'Google' : c.metaAdsId ? 'Meta' : '—'}
+                      {c.googleAdsId && c.metaAdsId
+                        ? "Google + Meta"
+                        : c.googleAdsId
+                          ? "Google"
+                          : c.metaAdsId
+                            ? "Meta"
+                            : "—"}
                     </span>
                   </button>
                 ))}
@@ -178,8 +286,8 @@ export default function Index() {
           </div>
         )}
 
-        {hasGoogle && renderPlatformSection('Google Ads', gadsData, gadsLoading, gadsError)}
-        {hasMeta && renderPlatformSection('Meta Ads', metaData, metaLoading, metaError)}
+        {hasGoogle && renderPlatformSection("Google Ads", gadsData, gadsLoading, gadsError)}
+        {hasMeta && renderPlatformSection("Meta Ads", metaData, metaLoading, metaError)}
       </main>
 
       <ChatPanel clientName={displayName} />
