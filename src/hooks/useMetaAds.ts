@@ -23,11 +23,11 @@ export function useMetaAds() {
   const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = async (bmToken?: 'bm1' | 'bm2') => {
     setLoadingAccounts(true);
     try {
       const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
-        body: { mode: 'list_accounts' },
+        body: { mode: 'list_accounts', bm_token: bmToken ?? 'bm1' },
       });
       if (fnError) throw fnError;
       setAccounts(result.accounts || []);
@@ -39,21 +39,28 @@ export function useMetaAds() {
     }
   };
 
-  const fetchData = async (adAccountId?: string, dateFrom?: string, dateTo?: string) => {
+  const fetchData = async (
+    adAccountId?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    bmToken?: 'bm1' | 'bm2',
+  ) => {
     setLoading(true);
     setError(null);
 
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, string> = {
+        bm_token: bmToken ?? 'bm1',
+      };
       if (adAccountId) body.ad_account_id = adAccountId;
       if (dateFrom) body.date_from = dateFrom;
       if (dateTo) body.date_to = dateTo;
 
-      const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
-        body,
-      });
+      const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', { body });
 
       if (fnError) throw fnError;
+
+      if (!result?.kpi) throw new Error('Resposta inválida da API Meta Ads');
 
       setData({
         kpi: result.kpi,
@@ -66,11 +73,10 @@ export function useMetaAds() {
     } catch (err: any) {
       console.error('Meta Ads fetch error:', err);
       let message = err.message || 'Erro ao buscar dados do Meta Ads';
-      // Try to extract the actual error body from FunctionsHttpError
       if (err.context?.body) {
         try {
-          const body = await err.context.body.json?.() || err.context.body;
-          if (typeof body === 'object' && body.error) message = body.error;
+          const b = await err.context.body.json?.() || err.context.body;
+          if (typeof b === 'object' && b.error) message = b.error;
         } catch {}
       }
       setError(message);

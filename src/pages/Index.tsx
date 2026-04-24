@@ -64,18 +64,17 @@ export default function Index() {
     return { from, to };
   }, [period]);
 
-  // Fetch data when client or period changes
   useEffect(() => {
     const { from, to } = getDateRange();
     if (isAll) {
       fetchGads(MCC_CUSTOMER_ID, from, to);
-      fetchMeta(undefined, from, to);
+      // No Meta fetch in "all" mode — requires per-client token selection
     } else {
       if (client?.googleAdsId) {
         fetchGads(MCC_CUSTOMER_ID, from, to, client.googleAdsId);
       }
       if (client?.metaAdsId) {
-        fetchMeta(client.metaAdsId, from, to);
+        fetchMeta(client.metaAdsId, from, to, client.metaBmToken);
       }
     }
   }, [selectedClientId, period]);
@@ -190,7 +189,6 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -211,10 +209,7 @@ export default function Index() {
             {clientOpen && (
               <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-80 overflow-y-auto">
                 <button
-                  onClick={() => {
-                    setSelectedClientId("all");
-                    setClientOpen(false);
-                  }}
+                  onClick={() => { setSelectedClientId("all"); setClientOpen(false); }}
                   className={`w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors ${
                     isAll ? "text-primary bg-primary/5" : "text-card-foreground"
                   }`}
@@ -225,10 +220,7 @@ export default function Index() {
                 {clientsConfig.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => {
-                      setSelectedClientId(c.id);
-                      setClientOpen(false);
-                    }}
+                    onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
                     className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
                       c.id === selectedClientId ? "text-primary bg-primary/5" : "text-card-foreground"
                     }`}
@@ -260,8 +252,14 @@ export default function Index() {
           </div>
         )}
 
+        {isAll && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Selecione um cliente específico para ver os dados de Meta Ads. O modo "Todos os Clientes" exibe apenas Google Ads (MCC).
+          </div>
+        )}
+
         {hasGoogle && renderPlatformSection("Google Ads", gadsData, gadsLoading, gadsError)}
-        {hasMeta && renderPlatformSection("Meta Ads", metaData, metaLoading, metaError)}
+        {hasMeta && !isAll && renderPlatformSection("Meta Ads", metaData, metaLoading, metaError)}
       </main>
 
       <ChatPanel clientName={displayName} />

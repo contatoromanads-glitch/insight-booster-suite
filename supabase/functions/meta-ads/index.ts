@@ -12,6 +12,14 @@ interface MetaAdsRequest {
   date_from?: string;
   date_to?: string;
   mode?: 'data' | 'list_accounts';
+  bm_token?: 'bm1' | 'bm2';
+}
+
+function resolveAccessToken(bmToken?: 'bm1' | 'bm2'): string {
+  const key = bmToken === 'bm2' ? 'META_ACCESS_TOKEN_2' : 'META_ACCESS_TOKEN';
+  const token = Deno.env.get(key);
+  if (!token) throw new Error(`${key} não configurado nos secrets do Supabase`);
+  return token;
 }
 
 async function fetchInsights(accountId: string, accessToken: string, dateFrom: string, dateTo: string, fields: string, breakdowns?: string, level?: string) {
@@ -64,27 +72,14 @@ function getConversions(actions: any[]): number {
   return convAction ? parseInt(convAction.value, 10) : 0;
 }
 
-function getCostPerConversion(costPerAction: any[]): number {
-  if (!costPerAction) return 0;
-  const cpa = costPerAction.find((a: any) =>
-    a.action_type === 'offsite_conversion' ||
-    a.action_type === 'lead' ||
-    a.action_type === 'purchase' ||
-    a.action_type === 'complete_registration'
-  );
-  return cpa ? parseFloat(cpa.value) : 0;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const accessToken = Deno.env.get('META_ACCESS_TOKEN');
-    if (!accessToken) throw new Error('META_ACCESS_TOKEN not configured');
-
     const body: MetaAdsRequest = await req.json();
+    const accessToken = resolveAccessToken(body.bm_token);
 
     // Mode: list ad accounts accessible to the token
     if (body.mode === 'list_accounts') {
@@ -93,7 +88,7 @@ serve(async (req) => {
       const data = await res.json();
       if (data.error) throw new Error(`Meta API error: ${JSON.stringify(data.error)}`);
       const accounts = (data.data || [])
-        .filter((a: any) => a.account_status === 1) // 1 = ACTIVE
+        .filter((a: any) => a.account_status === 1)
         .map((a: any) => ({ id: a.account_id, name: a.name || `Conta ${a.account_id}` }));
       return new Response(JSON.stringify({ accounts }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -101,21 +96,18 @@ serve(async (req) => {
     }
 
     const accountId = body.ad_account_id || Deno.env.get('META_AD_ACCOUNT_ID');
-    if (!accountId) throw new Error('No ad account ID provided');
+    if (!accountId) throw new Error('Nenhum ad_account_id fornecido');
 
-    // Ensure act_ prefix
     const cleanAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
 
     const now = new Date();
     const dateTo = body.date_to || now.toISOString().slice(0, 10);
     const dateFrom = body.date_from || new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
 
-    // Calculate previous period for comparison
     const periodMs = new Date(dateTo).getTime() - new Date(dateFrom).getTime();
     const prevTo = new Date(new Date(dateFrom).getTime() - 86400000).toISOString().slice(0, 10);
     const prevFrom = new Date(new Date(dateFrom).getTime() - periodMs - 86400000).toISOString().slice(0, 10);
 
-    // Fetch all data in parallel
     const [
       summaryData,
       prevSummaryData,
@@ -127,7 +119,6 @@ serve(async (req) => {
       fetchInsights(cleanAccountId, accessToken, dateFrom, dateTo, 'spend,impressions,clicks,ctr,actions,cost_per_action_type'),
       fetchInsights(cleanAccountId, accessToken, prevFrom, prevTo, 'spend,impressions,clicks,ctr,actions,cost_per_action_type'),
       fetchInsights(cleanAccountId, accessToken, dateFrom, dateTo, 'spend,impressions,clicks,conversions,date_start', undefined, 'campaign').then(data => {
-        // Aggregate by date
         const byDate: Record<string, any> = {};
         for (const row of data) {
           const d = row.date_start;
@@ -144,7 +135,6 @@ serve(async (req) => {
       fetchInsights(cleanAccountId, accessToken, dateFrom, dateTo, 'spend,impressions,clicks,actions', 'region'),
     ]);
 
-    // Process KPI
     const s = summaryData[0] || {};
     const ps = prevSummaryData[0] || {};
     const spend = parseFloat(s.spend || '0');
@@ -153,7 +143,7 @@ serve(async (req) => {
     const ctr = parseFloat(s.ctr || '0');
     const conversions = getConversions(s.actions);
     const cpa = conversions > 0 ? spend / conversions : 0;
-    const roas = spend > 0 ? (conversions * 100) / spend : 0; // Simplified
+    const roas = spend > 0 ? (conversions * 100) / spend : 0;
 
     const prevSpend = parseFloat(ps.spend || '0');
     const prevImpressions = parseInt(ps.impressions || '0', 10);
@@ -168,7 +158,6 @@ serve(async (req) => {
       prevSpend, prevImpressions, prevClicks, prevCtr, prevConversions, prevCpa, prevRoas,
     };
 
-    // Process ages
     const ages = ageData.map((row: any) => ({
       ageGroup: row.age || 'Unknown',
       impressions: parseInt(row.impressions || '0', 10),
@@ -177,14 +166,12 @@ serve(async (req) => {
       spend: parseFloat(row.spend || '0'),
     }));
 
-    // Process genders
     const genders = genderData.map((row: any) => ({
       gender: row.gender === 'male' ? 'Masculino' : row.gender === 'female' ? 'Feminino' : 'Outros',
       value: parseInt(row.impressions || '0', 10),
       conversions: getConversions(row.actions),
     }));
 
-    // Process cities/regions
     const cities = regionData
       .map((row: any) => ({
         city: row.region || 'Unknown',
@@ -196,7 +183,6 @@ serve(async (req) => {
       .sort((a: any, b: any) => b.impressions - a.impressions)
       .slice(0, 10);
 
-    // Fetch ad sets separately
     let adSets: any[] = [];
     try {
       const rawAdSets = await fetchAdSets(cleanAccountId, accessToken, dateFrom, dateTo);
@@ -224,14 +210,7 @@ serve(async (req) => {
       console.error('Failed to fetch ad sets:', e);
     }
 
-    return new Response(JSON.stringify({
-      kpi,
-      trend: dailyData,
-      cities,
-      ages,
-      genders,
-      adSets,
-    }), {
+    return new Response(JSON.stringify({ kpi, trend: dailyData, cities, ages, genders, adSets }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
