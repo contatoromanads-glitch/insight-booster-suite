@@ -8,18 +8,15 @@ interface Message {
   timestamp: Date;
 }
 
-const MOCK_RESPONSES: Record<string, string> = {
-  default: 'Entendido! No momento estou processando sua solicitação. Em breve terei uma resposta para você.',
-  relatório: '📊 **Relatório resumido:**\n\nNos últimos 7 dias, suas campanhas geraram 5.420 conversões com um ROAS médio de 4.2x. O criativo "Treino Completo" foi o de melhor performance com CTR de 3.5%.',
-  pausa: '⏸️ Entendido! A campanha foi marcada para pausa. A alteração será aplicada em até 15 minutos.',
-  orçamento: '💰 Solicitação de aumento de orçamento registrada. O novo valor será aplicado a partir de amanhã.',
-};
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
-  clientName: string;
+  client: any; // Opcionalmente, pode importar a interface ClientConfig
 }
 
-export function ChatPanel({ clientName }: Props) {
+export function ChatPanel({ client }: Props) {
+  const clientName = client ? client.name : "Todos os Clientes";
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -45,26 +42,52 @@ export function ChatPanel({ clientName }: Props) {
     }]);
   }, [clientName]);
 
-  const send = () => {
+  const send = async () => {
     if (!input.trim()) return;
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: new Date() };
-    setMessages(prev => [...prev, userMsg]);
-    const text = input.toLowerCase();
+    
+    const userContent = input;
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: userContent, timestamp: new Date() };
+    
+    // Armazena a lista atualizada para enviar ao backend
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
     setInput('');
 
-    setTimeout(() => {
-      let response = MOCK_RESPONSES.default;
-      if (text.includes('relatório') || text.includes('relatorio')) response = MOCK_RESPONSES.relatório;
-      else if (text.includes('pausa') || text.includes('pausar')) response = MOCK_RESPONSES.pausa;
-      else if (text.includes('orçamento') || text.includes('orcamento') || text.includes('budget')) response = MOCK_RESPONSES.orçamento;
+    // Prepara o histórico simplificado para enviar à API (apenas role e content)
+    const history = currentMessages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('chat-agent', {
+        body: { 
+          message: userContent,
+          history: history,
+          clientName: clientName,
+          metaAdsId: client?.metaAdsId,
+          metaBmToken: client?.metaBmToken,
+          googleAdsId: client?.googleAdsId
+        }
+      });
+
+      if (error) throw error;
 
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response,
+        content: data.reply || "Desculpe, não consegui processar a resposta.",
         timestamp: new Date(),
       }]);
-    }, 800);
+    } catch (err: any) {
+      console.error('Chat error:', err);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ Erro de comunicação com a inteligência artificial. Verifique sua conexão. (${err.message})`,
+        timestamp: new Date(),
+      }]);
+    }
   };
 
   if (!isOpen) {
