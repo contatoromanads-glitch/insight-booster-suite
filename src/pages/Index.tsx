@@ -22,7 +22,8 @@ import { ChatPanel } from "@/components/dashboard/ChatPanel";
 import { DateFilter } from "@/components/dashboard/DateFilter";
 import { useGoogleAds } from "@/hooks/useGoogleAds";
 import { useMetaAds } from "@/hooks/useMetaAds";
-import { clientsConfig, MCC_CUSTOMER_ID } from "@/data/clientsConfig";
+import { useClients } from "@/hooks/useClients";
+import { MCC_CUSTOMER_ID } from "@/data/clientsConfig";
 
 export default function Index() {
   const [selectedClientId, setSelectedClientId] = useState("all");
@@ -32,9 +33,11 @@ export default function Index() {
   const { data: gadsData, loading: gadsLoading, error: gadsError, fetchData: fetchGads } = useGoogleAds();
   const { data: metaData, loading: metaLoading, error: metaError, fetchData: fetchMeta } = useMetaAds();
 
+  const { clients, loading: clientsLoading, error: clientsError } = useClients();
+
   const isAll = selectedClientId === "all";
-  const client = isAll ? null : clientsConfig.find((c) => c.id === selectedClientId)!;
-  const displayName = isAll ? "Todos os Clientes" : client!.name;
+  const client = isAll ? null : clients.find((c) => c.id === selectedClientId);
+  const displayName = isAll ? "Todos os Clientes" : (client?.name || "Carregando...");
   const hasGoogle = isAll || !!client?.googleAdsId;
   const hasMeta = isAll || !!client?.metaAdsId;
 
@@ -217,26 +220,34 @@ export default function Index() {
                   Todos os Clientes
                 </button>
                 <div className="border-t border-border" />
-                {clientsConfig.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
-                      c.id === selectedClientId ? "text-primary bg-primary/5" : "text-card-foreground"
-                    }`}
-                  >
-                    <span>{c.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {c.googleAdsId && c.metaAdsId
-                        ? "Google + Meta"
-                        : c.googleAdsId
-                          ? "Google"
-                          : c.metaAdsId
-                            ? "Meta"
-                            : "—"}
-                    </span>
-                  </button>
-                ))}
+                {clientsLoading ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Carregando clientes...
+                  </div>
+                ) : clientsError ? (
+                  <div className="p-4 text-center text-sm text-destructive">Erro ao carregar clientes</div>
+                ) : (
+                  clients.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setSelectedClientId(c.id); setClientOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors ${
+                        c.id === selectedClientId ? "text-primary bg-primary/5" : "text-card-foreground"
+                      }`}
+                    >
+                      <span>{c.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {c.googleAdsId && c.metaAdsId
+                          ? "Google + Meta"
+                          : c.googleAdsId
+                            ? "Google"
+                            : c.metaAdsId
+                              ? "Meta"
+                              : "—"}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>

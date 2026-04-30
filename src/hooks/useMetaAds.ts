@@ -23,7 +23,7 @@ export function useMetaAds() {
   const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
-  const fetchAccounts = async (bmToken?: 'bm1' | 'bm2') => {
+  const fetchAccounts = async (bmToken?: 'bm1' | 'bm2' | 'bm3') => {
     setLoadingAccounts(true);
     try {
       const { data: result, error: fnError } = await supabase.functions.invoke('meta-ads', {
@@ -43,7 +43,7 @@ export function useMetaAds() {
     adAccountId?: string,
     dateFrom?: string,
     dateTo?: string,
-    bmToken?: 'bm1' | 'bm2',
+    bmToken?: 'bm1' | 'bm2' | 'bm3',
   ) => {
     setLoading(true);
     setError(null);

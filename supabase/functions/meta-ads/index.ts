@@ -11,12 +11,15 @@ interface MetaAdsRequest {
   ad_account_id?: string;
   date_from?: string;
   date_to?: string;
-  mode?: 'data' | 'list_accounts';
-  bm_token?: 'bm1' | 'bm2';
+  mode?: 'data' | 'list_accounts' | 'update_adset';
+  bm_token?: 'bm1' | 'bm2' | 'bm3';
+  adset_id?: string;
+  action?: 'pause' | 'activate' | 'update_budget';
+  budget?: number; // em centavos (ou seja, multiplicar valor real por 100)
 }
 
-function resolveAccessToken(bmToken?: 'bm1' | 'bm2'): string {
-  const key = bmToken === 'bm2' ? 'META_ACCESS_TOKEN_2' : 'META_ACCESS_TOKEN';
+function resolveAccessToken(bmToken?: 'bm1' | 'bm2' | 'bm3'): string {
+  const key = bmToken === 'bm3' ? 'META_ACCESS_TOKEN_3' : bmToken === 'bm2' ? 'META_ACCESS_TOKEN_2' : 'META_ACCESS_TOKEN';
   const token = Deno.env.get(key);
   if (!token) throw new Error(`${key} não configurado nos secrets do Supabase`);
   return token;
@@ -91,6 +94,29 @@ serve(async (req) => {
         .filter((a: any) => a.account_status === 1)
         .map((a: any) => ({ id: a.account_id, name: a.name || `Conta ${a.account_id}` }));
       return new Response(JSON.stringify({ accounts }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Mode: update adset
+    if (body.mode === 'update_adset') {
+      if (!body.adset_id || !body.action) throw new Error('adset_id e action são obrigatórios para atualizar.');
+      
+      const updateParams = new URLSearchParams({ access_token: accessToken });
+      if (body.action === 'pause') updateParams.set('status', 'PAUSED');
+      if (body.action === 'activate') updateParams.set('status', 'ACTIVE');
+      if (body.action === 'update_budget') {
+        if (!body.budget) throw new Error('budget é obrigatório para update_budget.');
+        updateParams.set('daily_budget', body.budget.toString());
+      }
+
+      const url = `${GRAPH_API}/${body.adset_id}?${updateParams}`;
+      const res = await fetch(url, { method: 'POST' });
+      const data = await res.json();
+      
+      if (data.error) throw new Error(`Meta API error: ${JSON.stringify(data.error)}`);
+      
+      return new Response(JSON.stringify({ success: true, data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

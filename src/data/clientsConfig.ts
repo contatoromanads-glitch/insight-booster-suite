@@ -3,7 +3,7 @@ export interface ClientConfig {
   name: string;
   googleAdsId?: string;
   metaAdsId?: string;
-  metaBmToken?: 'bm1' | 'bm2';
+  metaBmToken?: 'bm1' | 'bm2' | 'bm3';
 }
 
 export const clientsConfig: ClientConfig[] = [
